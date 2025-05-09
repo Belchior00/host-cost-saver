@@ -1,21 +1,39 @@
-# Milestone 1 Report: Apriori Brute-Force Solution
+Approach: Apriori-Inspired Brute Force
 
-## Problem Statement
-Given a set of hosts (used/unused) and their tags, find the **smallest subset of tags** that:
-1. Maximizes coverage of unused hosts,
-2. Excludes all used hosts.
+Step 1: Parse Host Data
 
-## Methodology
-### Algorithm Design
-1. **Tag Filtering**: Remove tags associated with any used host.
-2. **Combinatorial Search**: Use Apriori-style iteration to generate tag combinations of increasing size.
-3. **Coverage Calculation**: For each combination, compute how many unused hosts are covered.
-4. **Early Termination**: Stop when the first valid solution is found (smallest tag set with maximal coverage).
+Each host is defined by a name and a list of tags.
 
-## Results
-- **Optimality**: Guarantees the minimal tag set for maximal coverage.
-- **Example Output**: For 5 hosts and 3 tags, the algorithm correctly identifies `T2` as the optimal tag.
+Step 2: Remove Invalid Tags
 
-## Limitations
-1. **Scalability**: Fails for datasets with >20 tags due to exponential complexity.
-2. **Input Sensitivity**: If all valid tags are excluded (e.g., due to association with used hosts), coverage drops to zero.
+All tags associated with used hosts are filtered out.
+
+Step 3: Group Tags by Key
+
+Tag values are grouped under each tag key to allow combinations like:
+
+Combination(key="app", values=["paywall", "warehouse"])
+
+Step 4: Generate Combinations
+
+For increasing sizes of tag key combinations (e.g., just "app", then "app+team", etc):
+
+All value combinations are tested
+
+The set of hosts covered by those tags is computed
+
+Only combinations that cover unused hosts only are kept
+
+Track the one(s) with maximum coverage
+
+Step 5: Return Result
+
+The best combinations are returned using the required dataclass structure.
+
+✅ Output Format
+
+Returns a list of SelectedTags, each containing:
+
+key: tag key (e.g., app)
+
+values: list of values that together identify only unused hosts
