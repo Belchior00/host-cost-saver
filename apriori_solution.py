@@ -1,77 +1,105 @@
-from itertools import combinations
+from dataclasses import dataclass
+from typing import List, Dict
+from itertools import combinations, product
 from collections import defaultdict
 
-def apriori_brute_force(hosts, tags, used_hosts):
-    """
-    Apriori-inspired brute-force algorithm to find the minimal tag set 
-    that maximizes coverage of unused hosts while excluding all used hosts.
+@dataclass
+class Tag:
+    key: str
+    value: str
 
-    Args:
-        hosts (dict): {host_id: set_of_tags}
-        tags (dict): {tag: set_of_associated_hosts}
-        used_hosts (set): Set of used host IDs
+@dataclass
+class Host:
+    name: str
+    tags: List[Tag]
 
-    Returns:
-        tuple: (best_coverage, list_of_optimal_tag_combinations)
-    """
-    # Step 1: Filter out tags associated with used hosts
-    invalid_tags = {
-        tag for tag, tag_hosts in tags.items()
-        if tag_hosts & used_hosts  # Tags intersecting with used hosts are invalid
+@dataclass
+class Combination:
+    key: str
+    values: List[str]
+
+@dataclass
+class SelectedTags:
+    tags: List[Combination]
+
+def unused_hosts(hosts: List[Host], used: Dict[str, bool]) -> List[SelectedTags]:
+    tag_to_hosts = defaultdict(set)
+    for host in hosts:
+        for tag in host.tags:
+            tag_to_hosts[(tag.key, tag.value)].add(host.name)
+
+    used_hosts = {name for name, is_used in used.items() if is_used}
+    unused_hosts_set = {host.name for host in hosts if not used.get(host.name, False)}
+
+    valid_tags = {
+        tag for tag, host_names in tag_to_hosts.items()
+        if not host_names & used_hosts
     }
-    valid_tags = set(tags.keys()) - invalid_tags
 
-    # Step 2: Identify unused hosts
-    unused_hosts = set(hosts.keys()) - used_hosts
+    key_to_values = defaultdict(set)
+    for key, value in valid_tags:
+        key_to_values[key].add(value)
 
     best_coverage = 0
     best_combinations = []
 
-    # Step 3: Generate tag combinations of increasing size
-    for r in range(1, len(valid_tags) + 1):
-        # Iterate through all combinations of size r
-        for combo in combinations(valid_tags, r):
-            # Calculate covered hosts as the union of all tags in the combo
-            covered_hosts = set().union(*(tags[tag] for tag in combo))
-            # Coverage = intersection with unused hosts
-            coverage = len(covered_hosts & unused_hosts)
+    for r in range(1, len(key_to_values) + 1):
+        for keys_combo in combinations(key_to_values.keys(), r):
+            value_combinations = [list(key_to_values[key]) for key in keys_combo]
+            for values_combo in product(*value_combinations):
+                try:
+                    covered_hosts = set.intersection(
+                        *[
+                            tag_to_hosts[(key, value)]
+                            for key, value in zip(keys_combo, values_combo)
+                        ]
+                    )
+                except KeyError:
+                    continue
 
-            # Update best combinations
-            if coverage > best_coverage:
-                best_coverage = coverage
-                best_combinations = [combo]
-            elif coverage == best_coverage:
-                best_combinations.append(combo)
+                if covered_hosts <= unused_hosts_set:
+                    coverage = len(covered_hosts)
+                    if coverage > best_coverage:
+                        best_coverage = coverage
+                        best_combinations = [list(zip(keys_combo, values_combo))]
+                    elif coverage == best_coverage:
+                        best_combinations.append(list(zip(keys_combo, values_combo)))
 
-        # Early termination if a valid solution is found
         if best_coverage > 0:
             break
 
-    return best_coverage, best_combinations
+    result = []
+    for combo in best_combinations:
+        combo_dict = defaultdict(list)
+        for key, value in combo:
+            combo_dict[key].append(value)
+        selected_tags = SelectedTags(
+            tags=[Combination(key=key, values=values) for key, values in combo_dict.items()]
+        )
+        result.append(selected_tags)
 
-# Example Usage
+    return result
+
+# Example test case
 if __name__ == "__main__":
-    # Sample input: 5 hosts with tags
-    hosts_example = {
-        'H1': {'T1', 'T3'},
-        'H2': {'T3'},
-        'H3': {'T1'},
-        'H4': {'T2', 'T3'},
-        'H5': {'T3'}
+    hosts = [
+        Host(name="M1", tags=[Tag("team", "ds"), Tag("bu", "ML"), Tag("app", "hydra"), Tag("instance-type", "m1")]),
+        Host(name="M2", tags=[Tag("team", "ds"), Tag("bu", "ML"), Tag("app", "psz"), Tag("instance-type", "m1")]),
+        Host(name="M3", tags=[Tag("team", "ds"), Tag("bu", "ML"), Tag("app", "paywall"), Tag("instance-type", "m1")]),
+        Host(name="M4", tags=[Tag("team", "de"), Tag("bu", "ML"), Tag("app", "search"), Tag("instance-type", "m1")]),
+        Host(name="M5", tags=[Tag("team", "de"), Tag("bu", "ML"), Tag("app", "cron"), Tag("instance-type", "m1")]),
+        Host(name="M6", tags=[Tag("team", "de"), Tag("bu", "ML"), Tag("app", "warehouse"), Tag("instance-type", "m1")]),
+    ]
+
+    used = {
+        "M1": True,
+        "M2": True,
+        "M3": False,
+        "M4": True,
+        "M5": True,
+        "M6": False,
     }
 
-    # Build tags dictionary from hosts
-    tags_example = defaultdict(set)
-    for host, host_tags in hosts_example.items():
-        for tag in host_tags:
-            tags_example[tag].add(host)
-
-    used_hosts_example = {'H1', 'H2'}
-
-    # Run the algorithm
-    coverage, combinations = apriori_brute_force(
-        hosts_example, tags_example, used_hosts_example
-    )
-
-    print(f"Best coverage: {coverage}")
-    print(f"Optimal tag combinations: {combinations}")
+    result = unused_hosts(hosts, used)
+    for selected in result:
+        print(selected)
